@@ -8,37 +8,54 @@ import os
 from timezonefinder import TimezoneFinder
 from zoneinfo import ZoneInfo
 
-# Optional: match Streamlit dark theme
-plt.style.use('dark_background')
+from streamlit_folium import st_folium
+import folium
+
+# Optional: use white background map styling
+plt.style.use('default')
 
 st.set_page_config(layout="centered", page_title="GOES Fire Viewer")
 st.title("🔥 GOES Fire Animation - April 1 Sample")
 
 # -------------------------------
-# 🗺️ Southeast USA Map Section
+# 🗺️ Southeast USA Interactive Map
 # -------------------------------
 st.subheader("🗺️ Southeast USA Region")
 
-# Load US states from naturalearth dataset
-us_states = gpd.read_file("https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json")
+# Coordinates to center the map roughly on Southeast USA
+center_lat, center_lon = 33.0, -85.0
+m = folium.Map(location=[center_lat, center_lon], zoom_start=5, tiles='cartodbpositron')
 
-# Your 12 Southeast states
-se_states = [
-    "Alabama", "Arkansas", "Florida", "Georgia", "Kentucky",
-    "Louisiana", "Mississippi", "North Carolina", "South Carolina",
-    "Tennessee", "Virginia", "West Virginia"
+# Draw rectangle over SE USA (for visual reference, optional)
+se_bounds = [
+    [24.5, -94.5],  # Southwest corner
+    [39.0, -75.0]   # Northeast corner
 ]
+folium.Rectangle(bounds=se_bounds, color="blue", fill=False).add_to(m)
 
-# Filter to only those
-seusa = us_states[us_states['name'].isin(se_states)]
+# Instruction
+folium.Marker(
+    location=[center_lat, center_lon],
+    icon=folium.DivIcon(html="<div style='font-size: 12px; color: gray;'>Click anywhere on the map</div>")
+).add_to(m)
 
-# Plot the SE region
-fig, ax = plt.subplots(figsize=(8, 6))
-seusa.boundary.plot(ax=ax, color='cyan', linewidth=1)
-seusa.plot(ax=ax, color='black', alpha=0.3)
-ax.set_title("Southeast USA Focus Area", fontsize=14)
-ax.axis('off')
-st.pyplot(fig)
+# Render the map
+map_data = st_folium(m, height=500, width=700)
+
+lat, lon = None, None
+if map_data and map_data.get("last_clicked"):
+    lat = map_data["last_clicked"]["lat"]
+    lon = map_data["last_clicked"]["lng"]
+
+    # Draw buffer map centered on point
+    m2 = folium.Map(location=[lat, lon], zoom_start=7, tiles='cartodbpositron')
+    folium.Circle(location=[lat, lon], radius=50000,  # 50 km
+                  color="red", fill=True, fill_opacity=0.2).add_to(m2)
+    folium.Marker(location=[lat, lon], popup="Selected Point").add_to(m2)
+    st_folium(m2, height=500, width=700)
+
+    # Show coordinates
+    st.markdown(f"**Selected Coordinates:** `{lat:.4f}, {lon:.4f}`")
 
 # -------------------------------
 # 🔥 Fire Animation Section
@@ -55,14 +72,14 @@ df['datetime'] = pd.to_datetime(df['YearDay'].astype(str), format='%Y%j') + \
 gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['Lon'], df['Lat']), crs='EPSG:4326')
 gdf = gdf.sort_values(by='datetime')
 
-# Get local timezone
+# Get local timezone for the dataset center
 tf = TimezoneFinder()
-center_lat = gdf['Lat'].mean()
-center_lon = gdf['Lon'].mean()
-tz_name = tf.timezone_at(lat=center_lat, lng=center_lon)
+center_lat_gdf = gdf['Lat'].mean()
+center_lon_gdf = gdf['Lon'].mean()
+tz_name = tf.timezone_at(lat=center_lat_gdf, lng=center_lon_gdf)
 gdf['local_time'] = gdf['datetime'].dt.tz_localize('UTC').dt.tz_convert(ZoneInfo(tz_name))
 
-# Button to trigger animation
+# Button to generate animation
 if st.button("Generate Fire Animation"):
     os.makedirs("frames", exist_ok=True)
     frames = []
@@ -92,6 +109,6 @@ if st.button("Generate Fire Animation"):
     imageio.mimsave("fire_animation.gif", frames, fps=2)
     st.success("GIF animation generated!")
 
-# Show GIF
+# Show generated GIF
 if os.path.exists("fire_animation.gif"):
     st.image("fire_animation.gif", caption="GOES Fire Progression (Local Time)", use_container_width=True)
