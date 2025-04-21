@@ -8,13 +8,47 @@ import os
 from timezonefinder import TimezoneFinder
 from zoneinfo import ZoneInfo
 
-st.set_page_config(layout="centered", page_title="GOES Fire Viewer")
+# Optional: match Streamlit dark theme
+plt.style.use('dark_background')
 
+st.set_page_config(layout="centered", page_title="GOES Fire Viewer")
 st.title("🔥 GOES Fire Animation - April 1 Sample")
+
+# -------------------------------
+# 🗺️ Southeast USA Map Section
+# -------------------------------
+st.subheader("🗺️ Southeast USA Region")
+
+# Load US states from naturalearth dataset
+us_states = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
+us_states = us_states[us_states['iso_a2'] == 'US']  # Only USA
+
+# Your 12 Southeast states
+se_states = [
+    "Alabama", "Arkansas", "Florida", "Georgia", "Kentucky",
+    "Louisiana", "Mississippi", "North Carolina", "South Carolina",
+    "Tennessee", "Virginia", "West Virginia"
+]
+
+# Filter to only those
+seusa = us_states[us_states['name'].isin(se_states)]
+
+# Plot the SE region
+fig, ax = plt.subplots(figsize=(8, 6))
+seusa.boundary.plot(ax=ax, color='cyan', linewidth=1)
+seusa.plot(ax=ax, color='black', alpha=0.3)
+ax.set_title("Southeast USA Focus Area", fontsize=14)
+ax.axis('off')
+st.pyplot(fig)
+
+# -------------------------------
+# 🔥 Fire Animation Section
+# -------------------------------
 
 # Load and process data
 df = pd.read_csv("firesubset-goes.csv")
 
+# Convert UTC datetime
 df['datetime'] = pd.to_datetime(df['YearDay'].astype(str), format='%Y%j') + \
                  pd.to_timedelta(df['Time'] // 100, unit='h') + \
                  pd.to_timedelta(df['Time'] % 100, unit='m')
@@ -22,12 +56,11 @@ df['datetime'] = pd.to_datetime(df['YearDay'].astype(str), format='%Y%j') + \
 gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['Lon'], df['Lat']), crs='EPSG:4326')
 gdf = gdf.sort_values(by='datetime')
 
-# Determine timezone from central point
+# Get local timezone
 tf = TimezoneFinder()
 center_lat = gdf['Lat'].mean()
 center_lon = gdf['Lon'].mean()
 tz_name = tf.timezone_at(lat=center_lat, lng=center_lon)
-
 gdf['local_time'] = gdf['datetime'].dt.tz_localize('UTC').dt.tz_convert(ZoneInfo(tz_name))
 
 # Button to trigger animation
@@ -40,7 +73,7 @@ if st.button("Generate Fire Animation"):
         subset = gdf[gdf['datetime'] <= t]
 
         local_time = pd.to_datetime(t).tz_localize('UTC').tz_convert(ZoneInfo(tz_name))
-        time_str = local_time.strftime('%I:%M %p')  # 12-hour format
+        time_str = local_time.strftime('%I:%M %p')
         date_str = local_time.strftime('%Y-%m-%d')
 
         fig, ax = plt.subplots(figsize=(6, 6))
@@ -60,6 +93,6 @@ if st.button("Generate Fire Animation"):
     imageio.mimsave("fire_animation.gif", frames, fps=2)
     st.success("GIF animation generated!")
 
-# Display GIF if available
+# Show GIF
 if os.path.exists("fire_animation.gif"):
     st.image("fire_animation.gif", caption="GOES Fire Progression (Local Time)", use_column_width=True)
