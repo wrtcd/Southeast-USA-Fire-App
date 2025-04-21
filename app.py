@@ -20,7 +20,7 @@ st.title("🔥 GOES Fire Animation - April 1 Sample")
 st.subheader("🗺️ Southeast USA Region")
 
 # Load US states from naturalearth dataset
-us_states = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
+us_states = gpd.read_file("https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json")
 us_states = us_states[us_states['iso_a2'] == 'US']  # Only USA
 
 # Your 12 Southeast states
