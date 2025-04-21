@@ -11,26 +11,29 @@ from zoneinfo import ZoneInfo
 from streamlit_folium import st_folium
 import folium
 
-# Use white background style
+# Use white background
 plt.style.use('default')
 
 st.set_page_config(layout="centered", page_title="GOES Fire Viewer")
 st.title("🔥 GOES Fire Animation with Southeast USA Boundary")
 
 # -------------------------------
-# 🗺️ Southeast USA Boundary Map
+# 🗺️ Southeast USA Interactive Map
 # -------------------------------
 st.subheader("🗺️ Click anywhere within Southeast USA")
 
-# Load shapefile for SE USA states
-seusa = gpd.read_file("data/seusa.shp")
+@st.cache_data
+def load_boundary():
+    return gpd.read_file("data/seusa.shp")
 
-# Create folium map
+seusa = load_boundary()
+
+# Create map and zoom to boundary
 m = folium.Map(tiles='cartodbpositron')
 m.fit_bounds([[seusa.total_bounds[1], seusa.total_bounds[0]],
               [seusa.total_bounds[3], seusa.total_bounds[2]]])
 
-# Add shapefile boundary overlay
+# Add shapefile overlay
 folium.GeoJson(
     seusa,
     name="SE USA States",
@@ -41,7 +44,7 @@ folium.GeoJson(
     }
 ).add_to(m)
 
-# Add a center marker with instructions
+# Center instruction marker
 center_lat = (seusa.total_bounds[1] + seusa.total_bounds[3]) / 2
 center_lon = (seusa.total_bounds[0] + seusa.total_bounds[2]) / 2
 folium.Marker(
@@ -49,10 +52,10 @@ folium.Marker(
     icon=folium.DivIcon(html="<div style='font-size: 12px; color: gray;'>Click map to select a point</div>")
 ).add_to(m)
 
-# Render map
+# Display map
 map_data = st_folium(m, height=500, width=700)
 
-# If point clicked, display buffer map
+# Optional: draw buffer map if point is selected
 lat, lon = None, None
 if map_data and map_data.get("last_clicked"):
     lat = map_data["last_clicked"]["lat"]
@@ -67,7 +70,6 @@ if map_data and map_data.get("last_clicked"):
 # -------------------------------
 # 🔥 Fire Animation Section
 # -------------------------------
-
 df = pd.read_csv("firesubset-goes.csv")
 df['datetime'] = pd.to_datetime(df['YearDay'].astype(str), format='%Y%j') + \
                  pd.to_timedelta(df['Time'] // 100, unit='h') + \
@@ -82,8 +84,14 @@ center_lon_gdf = gdf['Lon'].mean()
 tz_name = tf.timezone_at(lat=center_lat_gdf, lng=center_lon_gdf)
 gdf['local_time'] = gdf['datetime'].dt.tz_localize('UTC').dt.tz_convert(ZoneInfo(tz_name))
 
+# Only generate new animation, don't auto-load old GIF
 if st.button("Generate Fire Animation"):
     os.makedirs("frames", exist_ok=True)
+
+    # Remove old GIF if exists
+    if os.path.exists("fire_animation.gif"):
+        os.remove("fire_animation.gif")
+
     frames = []
     timestamps = pd.Series(gdf['datetime'].sort_values().unique())
 
@@ -113,6 +121,5 @@ if st.button("Generate Fire Animation"):
     imageio.mimsave("fire_animation.gif", frames, fps=2)
     st.success("GIF animation generated!")
 
-# Show GIF
-if os.path.exists("fire_animation.gif"):
+    # Display new GIF
     st.image("fire_animation.gif", caption="GOES Fire Progression (Local Time)", use_container_width=True)
