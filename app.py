@@ -94,4 +94,4 @@ if st.button("Generate Fire Animation"):
 
 # Show GIF
 if os.path.exists("fire_animation.gif"):
-    st.image("fire_animation.gif", caption="GOES Fire Progression (Local Time)", use_column_width=True)
+    st.image("fire_animation.gif", caption="GOES Fire Progression (Local Time)", use_container_width=True)
