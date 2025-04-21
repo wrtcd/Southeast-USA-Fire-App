@@ -5,3 +5,5 @@ matplotlib
 imageio
 shapely
 timezonefinder
+folium
+streamlit-folium
